@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>SaM's Radio</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body data-mood="">
+  <!-- Animated gradient layers (two, for crossfading between moods) -->
+  <div class="bg-layer" id="bg-a"></div>
+  <div class="bg-layer" id="bg-b"></div>
+
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-dot"></span>
+        SaM&rsquo;s&nbsp;Radio
+      </div>
+      <div class="topbar-actions">
+        <div class="status" id="status" aria-live="polite">
+          <span class="status-pill" id="status-navidrome" data-label="Navidrome">
+            <span class="status-dot"></span><span class="status-text">Navidrome</span>
+          </span>
+          <span class="status-pill" id="status-llm" data-label="LLM">
+            <span class="status-dot"></span><span class="status-text">LLM</span>
+          </span>
+        </div>
+        <button id="health-btn" class="ghost-btn" title="Test the connection to Navidrome and the local LLM">
+          Test connection
+        </button>
+        <button id="scores-btn" class="ghost-btn" title="Show every song's mood scores">
+          Scores
+        </button>
+        <button id="index-btn" class="ghost-btn" title="Scan Navidrome, look up lyrics and score every track by mood">
+          Rebuild library
+        </button>
+      </div>
+    </header>
+
+    <!-- Mood selector -->
+    <nav class="moods" id="moods" aria-label="Moods"></nav>
+
+    <main class="stage">
+      <!-- Now playing -->
+      <section class="now-playing glass" aria-label="Now playing">
+        <div class="art-wrap">
+          <img id="art" class="art" alt="Album art" />
+          <div class="art-glow" id="art-glow"></div>
+        </div>
+
+        <div class="track-meta">
+          <div class="track-title" id="track-title">Pick a mood to start</div>
+          <div class="track-artist" id="track-artist">—</div>
+        </div>
+
+        <div class="seek">
+          <span class="time" id="time-current">0:00</span>
+          <input type="range" id="seek-bar" min="0" max="1000" value="0" step="1" aria-label="Seek" />
+          <span class="time" id="time-total">0:00</span>
+        </div>
+
+        <div class="controls">
+          <button id="shuffle-btn" class="ctrl small" title="Shuffle" aria-label="Shuffle">
+            <svg viewBox="0 0 24 24"><path d="M16 3h5v5M4 20l17-17M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>
+          </button>
+          <button id="prev-btn" class="ctrl" title="Previous" aria-label="Previous">
+            <svg viewBox="0 0 24 24"><path d="M19 20L9 12l10-8v16zM5 19V5" fill="currentColor" stroke="none"/></svg>
+          </button>
+          <button id="play-btn" class="ctrl play" title="Play/Pause" aria-label="Play or pause">
+            <svg id="icon-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor" stroke="none"/></svg>
+            <svg id="icon-pause" class="hidden" viewBox="0 0 24 24"><path d="M6 4h4v16H6zM14 4h4v16h-4z" fill="currentColor" stroke="none"/></svg>
+          </button>
+          <button id="next-btn" class="ctrl" title="Next" aria-label="Next">
+            <svg viewBox="0 0 24 24"><path d="M5 4l10 8-10 8V4zM19 5v14" fill="currentColor" stroke="none"/></svg>
+          </button>
+          <div class="volume">
+            <svg viewBox="0 0 24 24" class="vol-icon"><path d="M11 5L6 9H2v6h4l5 4V5zM15 9a3 3 0 010 6M18 6a7 7 0 010 12"/></svg>
+            <input type="range" id="volume-bar" min="0" max="100" value="90" aria-label="Volume" />
+          </div>
+        </div>
+      </section>
+
+      <!-- Up next -->
+      <section class="queue glass" aria-label="Up next">
+        <div class="queue-head">
+          <h2>Up next</h2>
+          <span id="queue-count" class="queue-count"></span>
+        </div>
+        <ol id="queue-list" class="queue-list"></ol>
+        <div id="queue-empty" class="queue-empty">Select a mood and the AI will line up songs for you.</div>
+      </section>
+    </main>
+  </div>
+
+  <!-- First-run / indexing overlay -->
+  <div id="overlay" class="overlay hidden">
+    <div class="overlay-card glass">
+      <h2 id="overlay-title">Build your library</h2>
+      <p id="overlay-text">
+        SaM&rsquo;s Radio needs to scan your Navidrome library, fetch lyrics and let the local AI
+        score each track by mood. This runs once (and incrementally afterwards).
+      </p>
+      <div class="progress-wrap">
+        <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+        <div class="progress-label" id="progress-label"></div>
+      </div>
+      <div class="overlay-actions">
+        <button id="overlay-start" class="primary-btn">Start indexing</button>
+        <button id="overlay-close" class="ghost-btn">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Song scores table -->
+  <div id="scores-overlay" class="overlay hidden">
+    <div class="overlay-card scores-card glass">
+      <div class="scores-head">
+        <h2>Song mood scores</h2>
+        <button id="scores-close" class="ghost-btn">Close</button>
+      </div>
+      <input id="scores-filter" class="scores-filter" type="search"
+             placeholder="Filter by song, artist or genre…" />
+      <div class="scores-table-wrap">
+        <table class="scores-table" id="scores-table">
+          <thead><tr id="scores-head-row"></tr></thead>
+          <tbody id="scores-body"></tbody>
+        </table>
+      </div>
+      <div class="scores-meta" id="scores-meta"></div>
+    </div>
+  </div>
+
+  <audio id="audio" preload="auto"></audio>
+  <script src="/app.js"></script>
+</body>
+</html>

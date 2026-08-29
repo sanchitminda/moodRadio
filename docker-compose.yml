@@ -1,0 +1,30 @@
+services:
+  app:
+    build:
+      context: .
+      args:
+        # Set to "false" to build a small image without the genre model.
+        INSTALL_GENRE: "true"
+    container_name: mood-radio
+    ports:
+      - "${PORT:-8080}:8080"
+    env_file:
+      - .env
+    environment:
+      # Ensure the in-container port matches the exposed port regardless of .env
+      PORT: 8080
+      # Turn on CLAP genre prediction (needs the image built with INSTALL_GENRE=true)
+      GENRE_MODEL_ENABLED: "true"
+    volumes:
+      - mood-data:/data
+      - model-cache:/models
+    # On Linux, host.docker.internal is not automatic. This maps it to the
+    # host gateway so NAVIDROME_URL / LLM_BASE_URL using host.docker.internal
+    # reach services running on the host. (No-op / harmless on Docker Desktop.)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+volumes:
+  mood-data:
+  model-cache:

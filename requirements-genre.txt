@@ -1,0 +1,7 @@
+# Optional dependencies for CLAP-based audio genre prediction.
+# Installed only when the image is built with --build-arg INSTALL_GENRE=true
+# (see Dockerfile / docker-compose.yml). CPU-only torch wheel keeps size down.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.4.1
+transformers==4.44.2
+numpy==1.26.4
