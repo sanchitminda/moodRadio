@@ -2,8 +2,16 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>SaM's Radio</title>
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#232946" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="SaM's Radio" />
+  <link rel="apple-touch-icon" href="/icon-192.png" />
+  <link rel="icon" href="/icon-192.png" />
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body data-mood="">
@@ -25,12 +33,18 @@
           <span class="status-pill" id="status-llm" data-label="LLM">
             <span class="status-dot"></span><span class="status-text">LLM</span>
           </span>
+          <span class="status-pill" id="status-clap" data-label="CLAP">
+            <span class="status-dot"></span><span class="status-text">CLAP</span>
+          </span>
         </div>
         <button id="health-btn" class="ghost-btn" title="Test the connection to Navidrome and the local LLM">
           Test connection
         </button>
         <button id="scores-btn" class="ghost-btn" title="Show every song's mood scores">
           Scores
+        </button>
+        <button id="offline-btn" class="ghost-btn" title="Cache the current playlist so it plays without internet">
+          Save offline
         </button>
         <button id="index-btn" class="ghost-btn" title="Scan Navidrome, look up lyrics and score every track by mood">
           Rebuild library

@@ -2,6 +2,7 @@
 
 const KNOWN_GRADIENTS = new Set([
   "happy", "sad", "romantic", "driving", "long_drive_slow",
+  "party", "workout", "chill", "focus", "nostalgic", "devotional",
 ]);
 
 const state = {
@@ -39,6 +40,7 @@ const el = {
   healthBtn: document.getElementById("health-btn"),
   statusNav: document.getElementById("status-navidrome"),
   statusLLM: document.getElementById("status-llm"),
+  statusClap: document.getElementById("status-clap"),
   scoresBtn: document.getElementById("scores-btn"),
   scoresOverlay: document.getElementById("scores-overlay"),
   scoresClose: document.getElementById("scores-close"),
@@ -46,6 +48,7 @@ const el = {
   scoresHeadRow: document.getElementById("scores-head-row"),
   scoresBody: document.getElementById("scores-body"),
   scoresMeta: document.getElementById("scores-meta"),
+  offlineBtn: document.getElementById("offline-btn"),
   overlay: document.getElementById("overlay"),
   overlayStart: document.getElementById("overlay-start"),
   overlayClose: document.getElementById("overlay-close"),
@@ -118,6 +121,7 @@ async function selectMood(slug) {
     }
     state.queue = data.tracks;
     state.index = 0;
+    saveQueueLocal(slug);
     renderQueue();
     playCurrent();
   } catch (err) {
@@ -219,16 +223,31 @@ el.seek.addEventListener("change", () => {
 
 // --- Connection status -------------------------------------------------------
 function setHealthPill(pill, stateName, errText) {
-  pill.classList.remove("ok", "fail", "checking");
+  pill.classList.remove("ok", "fail", "checking", "off");
   pill.classList.add(stateName);
   const label = pill.dataset.label;
-  const words = { ok: "connected", fail: "unreachable", checking: "checking…" };
+  const words = { ok: "connected", fail: "unreachable", checking: "checking…", off: "disabled" };
   pill.title = errText ? `${label}: ${errText}` : `${label}: ${words[stateName]}`;
+}
+
+function setClapPill(genre) {
+  // genre = {enabled, available, loaded} from /api/health, or undefined.
+  if (!genre || !genre.enabled) {
+    setHealthPill(el.statusClap, "off", "genre model disabled (set GENRE_MODEL_ENABLED=1)");
+    return;
+  }
+  if (genre.available === false) {
+    setHealthPill(el.statusClap, "fail",
+      "enabled but torch/transformers not in the image — rebuild with INSTALL_GENRE=true");
+    return;
+  }
+  setHealthPill(el.statusClap, "ok", genre.loaded ? "enabled (model loaded)" : "enabled");
 }
 
 async function refreshHealth() {
   setHealthPill(el.statusNav, "checking");
   setHealthPill(el.statusLLM, "checking");
+  setHealthPill(el.statusClap, "checking");
   el.healthBtn.disabled = true;
   try {
     // Read the body even on 503 (it carries navidrome/llm booleans + errors).
@@ -236,9 +255,11 @@ async function refreshHealth() {
     const data = await res.json().catch(() => ({}));
     setHealthPill(el.statusNav, data.navidrome ? "ok" : "fail", data.navidrome_error);
     setHealthPill(el.statusLLM, data.llm ? "ok" : "fail", data.llm_error);
+    setClapPill(data.genre);
   } catch (err) {
     setHealthPill(el.statusNav, "fail", String(err));
     setHealthPill(el.statusLLM, "fail", String(err));
+    setHealthPill(el.statusClap, "fail", String(err));
   } finally {
     el.healthBtn.disabled = false;
   }
@@ -249,6 +270,28 @@ el.healthBtn.addEventListener("click", refreshHealth);
 // --- Scores table ------------------------------------------------------------
 let scoresData = { moods: [], tracks: [], total: 0 };
 let scoresSort = { key: null, dir: -1 };  // dir: 1 asc, -1 desc
+
+// Top CLAP label + probability for a track (or null if not classified).
+function clapTop(t) {
+  const gs = t.genre_scores;
+  if (!gs) return null;
+  let label = null, prob = -1;
+  for (const [l, p] of Object.entries(gs)) {
+    if (p > prob) { prob = p; label = l; }
+  }
+  return label === null ? null : { label, prob };
+}
+
+// Multi-line tooltip of the top CLAP labels and their probabilities.
+function clapTip(t) {
+  const gs = t.genre_scores;
+  if (!gs) return "";
+  return Object.entries(gs)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6)
+    .map(([l, p]) => `${l}: ${p.toFixed(2)}`)
+    .join("\n");
+}
 
 async function openScores() {
   el.scoresOverlay.classList.remove("hidden");
@@ -266,7 +309,7 @@ function closeScores() { el.scoresOverlay.classList.add("hidden"); }
 function buildScoresHead() {
   const moodSlugs = scoresData.moods.map((m) => m.slug);
   const cols = [
-    ["title", "Song"], ["artist", "Artist"], ["genre", "Genre"],
+    ["title", "Song"], ["artist", "Artist"], ["genre", "Genre"], ["_clap", "CLAP genre"],
     ...scoresData.moods.map((m) => [m.slug, m.label]),
   ];
   el.scoresHeadRow.innerHTML = "";
@@ -275,10 +318,11 @@ function buildScoresHead() {
     th.textContent = label;
     const isMood = moodSlugs.includes(key);
     if (isMood) th.classList.add("mood-col");
-    th.title = "Click to sort";
+    if (key === "_clap") th.classList.add("clap-col");
+    th.title = key === "_clap" ? "CLAP audio classification — click to sort by confidence" : "Click to sort";
     th.addEventListener("click", () => {
       if (scoresSort.key === key) scoresSort.dir *= -1;
-      else scoresSort = { key, dir: isMood ? -1 : 1 };
+      else scoresSort = { key, dir: (isMood || key === "_clap") ? -1 : 1 };
       renderScores();
     });
     el.scoresHeadRow.appendChild(th);
@@ -293,13 +337,15 @@ function renderScores() {
     rows = rows.filter((t) =>
       (t.title || "").toLowerCase().includes(q) ||
       (t.artist || "").toLowerCase().includes(q) ||
-      (t.genre || "").toLowerCase().includes(q));
+      (t.genre || "").toLowerCase().includes(q) ||
+      (clapTop(t)?.label || "").toLowerCase().includes(q));
   }
   if (scoresSort.key) {
     const k = scoresSort.key, dir = scoresSort.dir, isMood = moods.includes(k);
     rows = rows.slice().sort((a, b) => {
       let va, vb;
-      if (isMood) { va = a.scores?.[k] ?? 0; vb = b.scores?.[k] ?? 0; }
+      if (k === "_clap") { va = clapTop(a)?.prob ?? -1; vb = clapTop(b)?.prob ?? -1; }
+      else if (isMood) { va = a.scores?.[k] ?? 0; vb = b.scores?.[k] ?? 0; }
       else { va = (a[k] || "").toLowerCase(); vb = (b[k] || "").toLowerCase(); }
       return va < vb ? -dir : va > vb ? dir : 0;
     });
@@ -318,7 +364,23 @@ function renderScores() {
     const tdArtist = document.createElement("td");
     tdArtist.className = "artist"; tdArtist.textContent = t.artist || ""; tr.appendChild(tdArtist);
     const tdGenre = document.createElement("td");
-    tdGenre.textContent = t.genre || "—"; tr.appendChild(tdGenre);
+    tdGenre.textContent = t.genre || "—";
+    if (t.genre_source) tdGenre.title = `source: ${t.genre_source}`;
+    tr.appendChild(tdGenre);
+
+    // CLAP audio classification: top label + confidence, tinted; hover for full list.
+    const tdClap = document.createElement("td");
+    tdClap.className = "clap-col";
+    const top = clapTop(t);
+    if (top) {
+      tdClap.textContent = `${top.label} · ${top.prob.toFixed(2)}`;
+      tdClap.title = clapTip(t);
+      tdClap.style.background = `rgba(120,150,255,${(top.prob * 0.6).toFixed(2)})`;
+    } else {
+      tdClap.textContent = "—";
+    }
+    tr.appendChild(tdClap);
+
     for (const m of moods) {
       const v = t.scores?.[m] ?? 0;
       const td = document.createElement("td");
@@ -394,9 +456,97 @@ async function pollIndex() {
   }
 }
 
+// --- PWA / offline -----------------------------------------------------------
+const QUEUE_KEY = "samradio.queue";
+
+function saveQueueLocal(mood) {
+  try {
+    localStorage.setItem(QUEUE_KEY, JSON.stringify({ mood, tracks: state.queue }));
+  } catch { /* storage full / disabled — non-fatal */ }
+}
+
+function loadQueueLocal() {
+  try {
+    const raw = localStorage.getItem(QUEUE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+// Play the last-saved queue from cache (used when the backend is unreachable).
+function restoreOfflineQueue() {
+  const saved = loadQueueLocal();
+  if (!saved || !saved.tracks || !saved.tracks.length) return false;
+  state.queue = saved.tracks;
+  state.index = 0;
+  if (saved.mood) {
+    setMoodBackground(saved.mood);
+    for (const btn of el.moods.children) {
+      btn.classList.toggle("active", btn.dataset.slug === saved.mood);
+    }
+  }
+  renderQueue();
+  playCurrent();  // sets audio.src; the SW serves it from cache when offline
+  return true;
+}
+
+let swReg = null;
+function initServiceWorker() {
+  if (!("serviceWorker" in navigator)) return;
+  navigator.serviceWorker.register("/sw.js").then((reg) => { swReg = reg; }).catch(() => {});
+  navigator.serviceWorker.addEventListener("message", (e) => {
+    const m = e.data || {};
+    if (m.type === "CACHE_PROGRESS") {
+      el.offlineBtn.textContent = `Saving ${m.done}/${m.total}…`;
+    } else if (m.type === "CACHE_DONE") {
+      el.offlineBtn.textContent = "Saved offline ✓";
+      el.offlineBtn.disabled = false;
+      setTimeout(() => { el.offlineBtn.textContent = "Save offline"; }, 4000);
+    } else if (m.type === "CACHE_CLEARED") {
+      el.offlineBtn.textContent = "Save offline";
+    }
+  });
+}
+
+async function saveOffline() {
+  if (!state.queue.length) {
+    el.offlineBtn.textContent = "Pick a mood first";
+    setTimeout(() => { el.offlineBtn.textContent = "Save offline"; }, 2500);
+    return;
+  }
+  const ctrl = navigator.serviceWorker && navigator.serviceWorker.controller;
+  if (!ctrl) {
+    el.offlineBtn.textContent = "Reload, then retry";
+    setTimeout(() => { el.offlineBtn.textContent = "Save offline"; }, 3000);
+    return;
+  }
+  // Cache both the audio stream and the cover for every queued track.
+  const paths = [];
+  for (const t of state.queue) {
+    if (t.stream_url) paths.push(t.stream_url);
+    if (t.cover_url) paths.push(t.cover_url);
+  }
+  el.offlineBtn.disabled = true;
+  el.offlineBtn.textContent = "Saving…";
+  saveQueueLocal(state.currentMood);
+  ctrl.postMessage({ type: "CACHE_TRACKS", paths });
+}
+
+el.offlineBtn.addEventListener("click", saveOffline);
+
 // --- Init --------------------------------------------------------------------
 async function init() {
-  await loadMoods();
+  initServiceWorker();
+  setMoodBackground("");  // show the default animated gradient immediately
+  try {
+    await loadMoods();
+  } catch {
+    // Backend unreachable — fall back to the last cached playlist so the user
+    // can still play saved songs offline.
+    if (restoreOfflineQueue()) {
+      el.queueEmpty.textContent = "Offline — playing your saved playlist.";
+    }
+    return;
+  }
   refreshHealth();  // fire-and-forget; updates the status pills
   try {
     const status = await api("/api/index/status");

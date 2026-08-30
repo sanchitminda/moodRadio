@@ -18,6 +18,9 @@ html, body {
   font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
   color: var(--text);
   overflow: hidden;
+  /* Dark base so text is always legible, even before a mood is picked and the
+     animated gradient layers fade in. */
+  background-color: #232946;
 }
 
 /* --- Animated gradient background (two crossfading layers) --- */
@@ -54,6 +57,12 @@ body::after {  /* subtle vignette for legibility */
 .grad-romantic       { background-image: linear-gradient(135deg, #7b1e3b, #c33764, #ff6a88, #7b1e3b); animation-duration: 22s; }
 .grad-driving        { background-image: linear-gradient(120deg, #0f9b8e, #6a3de8, #ff7a3d, #0f9b8e); animation-duration: 12s; }
 .grad-long_drive_slow{ background-image: linear-gradient(160deg, #3a1c5a, #7a3f77, #d98a5b, #f0b67f); animation-duration: 30s; }
+.grad-party          { background-image: linear-gradient(120deg, #ff2fb3, #7a2ff2, #2fd9ff, #ffd93b); animation-duration: 10s; }
+.grad-workout        { background-image: linear-gradient(120deg, #ff512f, #dd2476, #ff8a00, #ff512f); animation-duration: 9s; }
+.grad-chill          { background-image: linear-gradient(160deg, #0f7b8a, #1fa2a6, #4fd1c5, #2c5364); animation-duration: 34s; }
+.grad-focus          { background-image: linear-gradient(160deg, #1e2a44, #2b3a67, #3f5a86, #1e2a44); animation-duration: 36s; }
+.grad-nostalgic      { background-image: linear-gradient(135deg, #7a5230, #c98b5a, #e0a97e, #9a6b4f); animation-duration: 26s; }
+.grad-devotional     { background-image: linear-gradient(160deg, #b8860b, #e0a615, #ffd97a, #fff2cc); animation-duration: 28s; }
 
 /* --- Layout --- */
 .app {
@@ -96,6 +105,8 @@ body::after {  /* subtle vignette for legibility */
 .status-pill.ok   .status-dot { background: #35d07f; box-shadow: 0 0 10px rgba(53,208,127,0.75); }
 .status-pill.fail .status-dot { background: #ff5a6a; box-shadow: 0 0 10px rgba(255,90,106,0.75); }
 .status-pill.checking .status-dot { background: #ffcf4b; box-shadow: 0 0 10px rgba(255,207,75,0.75); animation: pulse 1.2s ease-in-out infinite; }
+.status-pill.off { opacity: 0.6; }
+.status-pill.off .status-dot { background: rgba(255,255,255,0.35); box-shadow: none; }
 .brand {
   font-weight: 700;
   font-size: 1.25rem;
@@ -319,13 +330,44 @@ input[type=range]::-moz-range-thumb {
 .scores-table td.song { max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
 .scores-table td.artist { max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
 .scores-table td.mood-col.best { font-weight: 700; color: #fff; }
+.scores-table th.clap-col, .scores-table td.clap-col { white-space: nowrap; font-size: 0.82rem; }
+.scores-table td.clap-col { cursor: help; }
 .scores-table tbody tr:hover { background: rgba(255,255,255,0.06); }
 .scores-meta { margin-top: 10px; font-size: 0.8rem; color: var(--text-dim); }
 
 /* Responsive */
 @media (max-width: 860px) {
   html, body { overflow: auto; }
+  .app {
+    /* respect notches / rounded corners on phones */
+    padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+             max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  }
   .stage { grid-template-columns: 1fr; }
   .queue { max-height: 42vh; }
   .track-title { font-size: 1.25rem; }
+
+  /* Moods scroll horizontally instead of stacking into many rows */
+  .moods { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
+  .moods::-webkit-scrollbar { height: 0; }
+  .mood-pill { flex: 0 0 auto; padding: 9px 16px; }
+
+  .topbar-actions { gap: 8px; }
+  .topbar-actions .ghost-btn { padding: 8px 12px; font-size: 0.82rem; }
+  .status-pill { padding: 5px 10px; font-size: 0.78rem; }
+}
+
+@media (max-width: 560px) {
+  .brand { font-size: 1.1rem; }
+  .now-playing { padding: 18px; gap: 16px; }
+  .art-wrap { width: min(64vw, 260px); }
+  .controls { gap: 10px; }
+  .ctrl { width: 42px; height: 42px; }
+  .ctrl.play { width: 60px; height: 60px; }
+  .volume { display: none; }              /* use the device volume on phones */
+  .seek { max-width: 100%; }
+  .scores-table { font-size: 0.8rem; }
+  .scores-table td.song, .scores-table td.artist { max-width: 130px; }
+  /* Let the status pills sit on their own scrollable row */
+  .status { overflow-x: auto; max-width: 100%; }
 }
