@@ -33,5 +33,6 @@ VOLUME ["/data", "/models"]
 
 EXPOSE 8080
 
-# PORT is configurable via env; default 8080
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port 8080"]
+# PORT is fixed inside the container (compose maps the host port). Set RELOAD=1
+# to enable --reload (useful with a bind-mounted app dir for live code edits).
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port 8080 ${RELOAD:+--reload}"]

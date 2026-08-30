@@ -16,8 +16,15 @@ services:
       # Turn on CLAP genre prediction (needs the image built with INSTALL_GENRE=true)
       GENRE_MODEL_ENABLED: "true"
     volumes:
-      - mood-data:/data
-      - model-cache:/models
+      # APP_DIR = the folder on your server holding the app code. It's mounted
+      # over the image's copy, so the container always runs whatever is there —
+      # edit files at APP_DIR and restart (or use RELOAD=1) instead of rebuilding.
+      - ${APP_DIR:-./app}:/srv/app
+      # DATA_DIR = where the SQLite index is saved on your server.
+      - ${DATA_DIR:-./data}:/data
+      # Model cache (CLAP weights). Point MODEL_DIR at a host path, or leave it as
+      # the named volume so the ~1.7GB download survives DB resets.
+      - ${MODEL_DIR:-model-cache}:/models
     # On Linux, host.docker.internal is not automatic. This maps it to the
     # host gateway so NAVIDROME_URL / LLM_BASE_URL using host.docker.internal
     # reach services running on the host. (No-op / harmless on Docker Desktop.)
@@ -26,5 +33,4 @@ services:
     restart: unless-stopped
 
 volumes:
-  mood-data:
   model-cache:
