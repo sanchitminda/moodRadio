@@ -34,6 +34,12 @@ DEFAULT_MOODS: dict[str, str] = {
     "romantic": "Romantic",
     "driving": "Driving",
     "long_drive_slow": "Long Drive · Slow",
+    "party": "Party",
+    "workout": "Workout",
+    "chill": "Chill",
+    "focus": "Focus",
+    "nostalgic": "Nostalgic",
+    "devotional": "Devotional",
 }
 
 
@@ -126,6 +132,10 @@ class Settings:
     genre_model: str = field(default_factory=lambda: _env("GENRE_MODEL", "laion/clap-htsat-unfused"))
     genre_segment_seconds: int = field(default_factory=lambda: int(_env("GENRE_SEGMENT_SECONDS", "20") or 20))
     genre_labels: list[str] = field(default_factory=lambda: _parse_labels(_env("GENRE_LABELS")))
+    # Ask the LLM to expand the CLAP candidate-label list (tailored to the current
+    # moods + library) before indexing. Off by default; uses genre_labels as seeds.
+    genre_labels_from_llm: bool = field(default_factory=lambda: _bool(_env("GENRE_LABELS_FROM_LLM", "false")))
+    genre_labels_max: int = field(default_factory=lambda: int(_env("GENRE_LABELS_MAX", "30") or 30))
 
     # Storage / server
     db_path: str = field(default_factory=lambda: _env("DB_PATH", "/data/moodradio.db"))

@@ -208,3 +208,81 @@ async def ping() -> bool:
         r.raise_for_status()
     log.debug("llm ping ok (%s)", url)
     return True
+
+
+async def suggest_genre_labels(client: httpx.AsyncClient, *, moods: dict[str, str],
+                               seed_labels: list[str], limit: int) -> list[str]:
+    """Ask the LLM for a genre-label set for CLAP, tailored to the moods/library.
+
+    Returns the seed labels merged with the LLM's suggestions (deduped, capped at
+    `limit`). On any failure, returns the seed labels unchanged.
+    """
+    url = f"{settings.llm_base_url.rstrip('/')}/v1/chat/completions"
+    headers = {"Content-Type": "application/json"}
+    if settings.llm_api_key:
+        headers["Authorization"] = f"Bearer {settings.llm_api_key}"
+
+    mood_list = ", ".join(moods.values())
+    system = (
+        "You are a music taxonomy expert. Produce concise genre / sub-genre labels "
+        "suitable for zero-shot audio classification (CLAP). Favour specific, "
+        "widely-understood styles. The library is heavily Indian/Bollywood, so "
+        "include relevant Indian styles as well as mainstream ones."
+    )
+    user = (
+        f"The app sorts songs into these moods: {mood_list}.\n"
+        f"Here are seed genre labels: {', '.join(seed_labels)}.\n"
+        f"Return up to {limit} genre labels total (keep the useful seeds, add more "
+        "that would help distinguish these moods and cover this library). "
+        'Respond as JSON: {"labels": ["label1", "label2", ...]}'
+    )
+    schema = {
+        "name": "genre_labels", "strict": True,
+        "schema": {
+            "type": "object",
+            "properties": {"labels": {"type": "array", "items": {"type": "string"}}},
+            "required": ["labels"], "additionalProperties": False,
+        },
+    }
+    payload: dict[str, Any] = {
+        "model": settings.llm_model,
+        "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+        "temperature": 0.4,
+        "stream": False,
+    }
+    rf = _response_format()
+    if rf and rf.get("type") == "json_schema":
+        payload["response_format"] = {"type": "json_schema", "json_schema": schema}
+    elif rf:
+        payload["response_format"] = rf
+
+    try:
+        r = await client.post(url, json=payload, headers=headers, timeout=120.0)
+        if r.status_code >= 400:
+            log.error("genre-label suggestion HTTP %s: %s", r.status_code, r.text[:300])
+        r.raise_for_status()
+        content = r.json()["choices"][0]["message"]["content"]
+        text = content[content.find("{"): content.rfind("}") + 1] or content
+        data = json.loads(text)
+        suggested = data.get("labels") if isinstance(data, dict) else None
+        if not isinstance(suggested, list):
+            raise ValueError("no 'labels' array")
+    except (httpx.HTTPError, KeyError, ValueError, IndexError) as exc:
+        log.error("genre-label suggestion failed (%s): %s; using seed labels", type(exc).__name__, exc)
+        return list(seed_labels)
+
+    # Merge seeds first (preserve order), then suggestions; dedupe case-insensitively.
+    merged: list[str] = []
+    seen: set[str] = set()
+    for label in [*seed_labels, *suggested]:
+        if not isinstance(label, str):
+            continue
+        label = label.strip()
+        key = label.lower()
+        if label and key not in seen:
+            seen.add(key)
+            merged.append(label)
+        if len(merged) >= limit:
+            break
+    log.info("genre labels: %d seed -> %d after LLM expansion", len(seed_labels), len(merged))
+    return merged

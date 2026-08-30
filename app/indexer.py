@@ -56,6 +56,17 @@ async def _enrich() -> None:
     processed = done_already
     batch_no = 0
     async with httpx.AsyncClient() as client:
+        # If enabled, ask the LLM to expand the CLAP candidate labels once, up
+        # front, tailored to the current moods + library. Falls back to the
+        # configured seed labels on any failure.
+        if genre.is_enabled() and settings.genre_labels_from_llm:
+            labels = await ai.suggest_genre_labels(
+                client, moods=settings.moods,
+                seed_labels=settings.genre_labels, limit=settings.genre_labels_max,
+            )
+            genre.set_labels(labels)
+            log.info("CLAP labels for this run: %s", ", ".join(labels))
+
         while True:
             batch = await db.pending_tracks(limit=settings.index_batch_size)
             if not batch:

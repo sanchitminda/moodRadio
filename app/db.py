@@ -243,12 +243,18 @@ def _all_scores_sync(limit: int, offset: int) -> list[dict[str, Any]]:
     conn = _connect()
     try:
         rows = conn.execute(
-            "SELECT id, title, artist, album, genre, genre_source FROM tracks ORDER BY artist, title LIMIT ? OFFSET ?",
+            "SELECT id, title, artist, album, genre, genre_source, genre_scores FROM tracks ORDER BY artist, title LIMIT ? OFFSET ?",
             (int(limit), int(offset)),
         ).fetchall()
         tracks = [dict(r) for r in rows]
         if not tracks:
             return []
+        for t in tracks:  # decode the stored CLAP label→probability JSON
+            raw = t.pop("genre_scores", None)
+            try:
+                t["genre_scores"] = json.loads(raw) if raw else None
+            except (TypeError, ValueError):
+                t["genre_scores"] = None
         ids = [t["id"] for t in tracks]
         placeholders = ",".join("?" * len(ids))
         score_rows = conn.execute(

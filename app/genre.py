@@ -22,10 +22,36 @@ log = logging.getLogger(__name__)
 _model = None
 _processor = None
 _load_failed = False
+_active_labels: list[str] | None = None
 
 
 def is_enabled() -> bool:
     return settings.genre_model_enabled
+
+
+def set_labels(labels: list[str] | None) -> None:
+    """Override the CLAP candidate labels for this run (e.g. an LLM-expanded set)."""
+    global _active_labels
+    _active_labels = list(labels) if labels else None
+
+
+def _labels() -> list[str]:
+    return _active_labels or settings.genre_labels
+
+
+def status() -> dict:
+    """Lightweight status for the health/status UI (does not load the model)."""
+    st = {"enabled": is_enabled(), "loaded": _model is not None, "available": False}
+    if is_enabled():
+        try:
+            import importlib.util
+            st["available"] = (
+                importlib.util.find_spec("torch") is not None
+                and importlib.util.find_spec("transformers") is not None
+            )
+        except Exception:  # noqa: BLE001
+            st["available"] = False
+    return st
 
 
 def _lazy_load() -> bool:
@@ -83,7 +109,7 @@ def _predict_sync(raw: bytes) -> tuple[str | None, dict | None]:
     if audio is None or audio.size < 48000:  # need at least ~1s
         return None, None
 
-    labels = settings.genre_labels
+    labels = _labels()
     inputs = _processor(text=labels, audios=[audio], sampling_rate=48000,
                         return_tensors="pt", padding=True)
     with torch.no_grad():

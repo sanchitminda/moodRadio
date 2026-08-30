@@ -14,7 +14,7 @@ from .logging_config import configure_logging
 
 configure_logging()
 
-from . import ai, db, indexer, navidrome  # noqa: E402  (import after logging is set up)
+from . import ai, db, genre, indexer, navidrome  # noqa: E402  (import after logging is set up)
 from .config import settings  # noqa: E402
 
 log = logging.getLogger("app.main")
@@ -22,7 +22,7 @@ log = logging.getLogger("app.main")
 STATIC_DIR = Path(__file__).parent / "static"
 
 # Bump this whenever code changes so a running container can be identified.
-APP_VERSION = "2026-08-29-clap-genre"
+APP_VERSION = "2026-08-30-pwa-mobile-offline"
 
 
 @asynccontextmanager
@@ -82,7 +82,9 @@ async def health():
         result["llm_error"] = str(exc)
         log.warning("health: llm unreachable: %s", exc)
     ok = result["navidrome"] and result["llm"]
-    log.info("health check: navidrome=%s llm=%s", result["navidrome"], result["llm"])
+    result["genre"] = genre.status()
+    log.info("health check: navidrome=%s llm=%s genre_enabled=%s",
+             result["navidrome"], result["llm"], result["genre"].get("enabled"))
     return JSONResponse(result, status_code=200 if ok else 503)
 
 
